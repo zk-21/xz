@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>大乐透数据下载</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:linear-gradient(135deg,#c0392b,#e74c3c);
+  min-height:100vh;display:flex;justify-content:center;align-items:center;padding:16px;
+}
+.card{
+  background:#fff;border-radius:16px;padding:24px;width:100%;max-width:420px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+}
+h1{font-size:22px;text-align:center;color:#c0392b;margin-bottom:6px}
+.sub{text-align:center;color:#999;font-size:13px;margin-bottom:20px}
+
+.row{margin-bottom:14px}
+.row label{display:block;font-size:14px;color:#555;margin-bottom:6px;font-weight:600}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn-num{
+  flex:1;min-width:60px;padding:10px 0;border:2px solid #e0e0e0;
+  border-radius:10px;background:#fafafa;font-size:14px;font-weight:700;
+  color:#555;cursor:pointer;text-align:center;transition:all .2s;
+}
+.btn-num:active,.btn-num.active{border-color:#e74c3c;background:#fdecea;color:#c0392b}
+input[type=number]{
+  width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:10px;
+  font-size:16px;text-align:center;outline:none;transition:border .2s;
+}
+input[type=number]:focus{border-color:#e74c3c}
+input[type=number]::placeholder{color:#ccc}
+
+.chks{display:flex;gap:16px;flex-wrap:wrap}
+.chks label{display:flex;align-items:center;gap:8px;font-weight:400;font-size:15px;cursor:pointer;color:#333}
+.chks input[type=checkbox]{width:20px;height:20px;accent-color:#e74c3c}
+
+.btn-go{
+  width:100%;padding:14px;background:linear-gradient(135deg,#c0392b,#e74c3c);
+  color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;
+  cursor:pointer;transition:transform .1s,opacity .2s;
+}
+.btn-go:active{transform:scale(.97)}                        
+.btn-go:disabled{opacity:.5;transform:none}
+
+.progress-wrap{margin-top:16px;display:none}
+.progress-bar{
+  height:8px;background:#eee;border-radius:4px;overflow:hidden;
+}
+.progress-fill{
+  height:100%;background:linear-gradient(90deg,#e74c3c,#c0392b);
+  border-radius:4px;width:0%;transition:width .3s;
+}
+.progress-txt{text-align:center;font-size:13px;color:#888;margin-top:6px}
+
+.preview{margin-top:16px;display:none}
+.preview h3{font-size:15px;color:#333;margin-bottom:10px}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#c0392b;color:#fff;padding:8px 6px;text-align:center;font-weight:600;position:sticky;top:0}
+td{padding:8px 6px;text-align:center;border-bottom:1px solid #f0f0f0}
+.fnum{color:#c0392b;font-weight:700}
+.bnum{color:#2980b9;font-weight:700}
+
+.dl-row{margin-top:14px;display:flex;gap:8px;display:none}
+.dl-btn{
+  flex:1;padding:10px;border-radius:10px;font-size:14px;font-weight:600;
+  border:2px solid #e74c3c;cursor:pointer;text-align:center;transition:all .2s;
+}
+.dl-btn.js{background:#fdecea;color:#c0392b}
+.dl-btn.xlsx{background:#e74c3c;color:#fff}
+.dl-btn:active{opacity:.7}
+
+.msg{text-align:center;font-size:14px;color:#e74c3c;margin-top:10px;min-height:20px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>大乐透数据下载</h1>
+  <p class="sub">中国体彩官方数据 · 实时同步</p>
+
+  <div class="row">
+    <label>下载期数</label>
+    <div class="btns" id="periodBtns">
+      <div class="btn-num" data-n="50">50 期</div>
+      <div class="btn-num active" data-n="120">120 期</div>
+      <div class="btn-num" data-n="500">500 期</div>
+      <div class="btn-num" data-n="1000">1000 期</div>
+    </div>
+    <input type="number" id="customPeriod" placeholder="或手动输入期数" min="1" max="2000" style="margin-top:8px">
+  </div>
+
+  <div class="row">
+    <label>输出格式</label>
+    <div class="chks">
+      <label><input type="checkbox" id="chkJS" checked> all_draws.js</label>
+      <label><input type="checkbox" id="chkXLSX" checked> 1.xlsx</label>
+    </div>
+  </div>
+
+  <button class="btn-go" id="btnGo" onclick="startFetch()">开始下载</button>
+  <div class="msg" id="msg"></div>
+
+  <div class="progress-wrap" id="progWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+    <p class="progress-txt" id="progTxt">准备中...</p>
+  </div>
+
+  <div class="preview" id="preview">
+    <h3>最新开奖号码</h3>
+    <div class="table-wrap"><table id="previewTable"></table></div>
+  </div>
+
+  <div class="dl-row" id="dlRow">
+    <div class="dl-btn js" id="dlJS" onclick="dlJSON()">📥 下载 all_draws.js</div>
+    <div class="dl-btn xlsx" id="dlXLSX" onclick="dlXLSX()">📥 下载 1.xlsx</div>
+  </div>
+</div>
+
+<script>
+let allDraws=[], wantJS=false, wantXLSX=false;
+
+document.getElementById('periodBtns').addEventListener('click',e=>{
+  const btn=e.target.closest('.btn-num');
+  if(!btn)return;
+  document.querySelectorAll('.btn-num').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('customPeriod').value='';
+});
+
+function getPeriod(){
+  const c=document.getElementById('customPeriod').value;
+  if(c&&parseInt(c)>0)return Math.min(parseInt(c),2000);
+  const a=document.querySelector('.btn-num.active');
+  return a?parseInt(a.dataset.n):120;
+}
+
+async function startFetch(){
+  const period=getPeriod();
+  wantJS=document.getElementById('chkJS').checked;
+  wantXLSX=document.getElementById('chkXLSX').checked;
+  if(!wantJS&&!wantXLSX){setMsg('请至少选择一种格式');return}
+
+  const btn=document.getElementById('btnGo');
+  btn.disabled=true;btn.textContent='下载中...';
+  document.getElementById('progWrap').style.display='block';
+  document.getElementById('preview').style.display='none';
+  document.getElementById('dlRow').style.display='none';
+  setMsg('');
+
+  allDraws=[];
+  try{
+    await fetchAll(period);
+    if(allDraws.length===0)throw new Error('未获取到数据');
+    showPreview();
+    document.getElementById('dlRow').style.display='flex';
+    setMsg(`完成！共 ${allDraws.length} 期`);
+  }catch(e){
+    setMsg('❌ '+e.message);
+  }finally{
+    btn.disabled=false;btn.textContent='开始下载';
+    document.getElementById('progWrap').style.display='none';
+  }
+}
+
+function setProg(pct,txt){
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progTxt').textContent=txt;
+}
+
+function setMsg(t){document.getElementById('msg').textContent=t;}
+
+function isLocalServer(){
+  // 检测是否通过本地代理服务器访问（非 file:// 协议）
+  const proto=location.protocol;
+  return proto==='http:'||proto==='https:';
+}
+
+async function fetchAll(period){
+  const pageSize=30, totalPages=Math.ceil(period/pageSize);
+  const seen=new Set();
+
+  // 如果通过本地代理服务器访问，用 /api/ 代理（零 CORS 问题）
+  // 否则显示错误提示
+  if(!isLocalServer()){
+    throw new Error(
+      '请在电脑上先启动代理服务器！\n\n'+
+      '电脑运行：python server.py\n'+
+      '然后手机浏览器访问 http://电脑IP:8080\n\n'+
+      '（手机和电脑必须连同一WiFi）'
+    );
+  }
+
+  for(let p=1;p<=totalPages;p++){
+    setProg(Math.round(p/totalPages*90),`抓取第 ${p}/${totalPages} 页...`);
+
+    // 通过本地服务器的 /api/ 代理请求（解决 CORS 问题）
+    const apiPath=`getHistoryPageListV1.qry?gameNo=85&provinceId=0&pageSize=${pageSize}&isVerify=1&pageNo=${p}`;
+    const resp=await fetch('/api/'+apiPath);
+    if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+    const json=await resp.json();
+    if(!json.success)throw new Error(json.errorMessage||'API返回错误');
+
+    const list=json.value?.list||[];
+    if(list.length===0)break;
+
+    for(const item of list){
+      const issue=item.lotteryDrawNum;
+      if(seen.has(issue))continue;
+      seen.add(issue);
+      const nums=item.lotteryDrawResult.split(/\s+/).map(Number);
+      if(nums.length<7)continue;
+      allDraws.push({
+        issue:issue,
+        date:item.lotteryDrawTime||'',
+        front:nums.slice(0,5).sort((a,b)=>a-b),
+        back:nums.slice(5,7).sort((a,b)=>a-b),
+      });
+    }
+    if(allDraws.length>=period)break;
+    await sleep(200);
+  }
+  allDraws.sort((a,b)=>parseInt(b.issue)-parseInt(a.issue));
+  allDraws=allDraws.slice(0,period);
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+function showPreview(){
+  const t=document.getElementById('previewTable');
+  let h='<thead><tr><th>期号</th><th>日期</th><th colspan="5">前区</th><th colspan="2">后区</th></tr></thead><tbody>';
+  const show=Math.min(10,allDraws.length);
+  for(let i=0;i<show;i++){
+    const d=allDraws[i];
+    h+=`<tr><td>${d.issue}</td><td>${d.date.slice(5)}</td>`;
+    d.front.forEach(n=>h+=`<td class="fnum">${String(n).padStart(2,'0')}</td>`);
+    d.back.forEach(n=>h+=`<td class="bnum">${String(n).padStart(2,'0')}</td>`);
+    h+='</tr>';
+  }
+  h+='</tbody>';
+  t.innerHTML=h;
+  document.getElementById('preview').style.display='block';
+}
+
+function genJS(){
+  let out=`// 大乐透开奖数据 — ${allDraws.length}期\n// 生成时间: ${new Date().toLocaleString()}\n// 数据来源: 中国体彩官方API\n\nconst ALL_DRAWS = [\n`;
+  for(let i=allDraws.length-1;i>=0;i--){
+    const d=allDraws[i];
+    out+=`  {issue:"${d.issue}",date:"${d.date}",front:[${d.front.join(',')}],back:[${d.back.join(',')}],front_str:"${d.front.map(n=>String(n).padStart(2,'0')).join(' ')}",back_str:"${d.back.map(n=>String(n).padStart(2,'0')).join(' ')}"}`;
+    out+=i>0?',\n':'';
+  }
+  out+=`\n];\n`;
+  return out;
+}
+
+function genXLSXRows(){
+  const rows=[];
+  const hdr=['期号','日期','星期','前1','前2','前3','前4','前5','后1','后2',
+    '一等注数','一等金额','一等追加注数','一等追加金额',
+    '二等注数','二等金额','二等追加注数','二等追加金额',
+    '三等注数','三等金额','四等注数','四等金额',
+    '五等注数','五等金额','六等注数','六等金额',
+    '销售额','奖池'];
+  rows.push(hdr);
+  for(const d of allDraws){
+    const day=['日','一','二','三','四','五','六'][new Date(d.date).getDay()]||'';
+    rows.push([d.issue,d.date,day,...d.front.map(String),...d.back.map(String),
+      '','','','','','','','','','','','','','','','','','','','','','','']);
+  }
+  return rows;
+}
+
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function dlJSON(){
+  const c=genJS();
+  downloadBlob(new Blob(['\uFEFF'+c],{type:'text/javascript;charset=utf-8'}),'all_draws.js');
+}
+
+// ---- mini xlsx (纯JS, 无依赖) ----
+function dlXLSX(){
+  const rows=genXLSXRows();
+  setMsg('生成 Excel 中...');
+  setTimeout(()=>{
+    try{
+      const buf=buildXLSX(rows);
+      downloadBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'1.xlsx');
+      setMsg('Excel 下载完成！');
+    }catch(e){
+      setMsg('Excel 生成失败: '+e.message);
+    }
+  },100);
+}
+
+function buildXLSX(rows){
+  const encoder=new TextEncoder();
+  function str(s){return encoder.encode(String(s));}
+  function escXml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function cell(col,row,val,style){
+    const ref=col+row;
+    let xml=`<c r="${ref}"`;
+    if(style)xml+=` s="${style}"`;
+    if(typeof val==='number'){
+      xml+=`><v>${val}</v></c>`;
+    }else{
+      xml+=` t="inlineStr"><is><t>${escXml(String(val))}</t></is></c>`;
+    }
+    return xml;
+  }
+
+  const colLetters='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(
+    'AB AC AD AE AF AG AH AI AJ AK AL AM AN AO AP AQ AR AS AT AU AV AW AX AY AZ'.split(' ')
+  );
+
+  let sheetXml='<sheetData>';
+  let sharedStrings=[];
+  for(let r=0;r<rows.length;r++){
+    const rowNum=r+1;
+    sheetXml+=`<row r="${rowNum}">`;
+    for(let c=0;c<rows[r].length;c++){
+      const v=rows[r][c];
+      sheetXml+=cell(colLetters[c],rowNum,v,r===0?1:undefined);
+    }
+    sheetXml+=`</row>`;
+  }
+  sheetXml+='</sheetData>';
+
+  const colsXml=colLetters.slice(0,rows[0]?.length||0).map((l,i)=>{
+    let w=8;
+    if(i===0||i===1)w=10;else if(i===2)w=5;
+    return `<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`;
+  }).join('');
+
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <cols>${colsXml}</cols>${sheetXml}</worksheet>`;
+
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="2"><font><sz val="11"/></font>
+<font><sz val="11"/><b/><color rgb="FFFFFFFF"/></font></fonts>
+<fills count="2"><fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFC0392B"/></patternFill></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>
+</styleSheet>`;
+
+  const sharedStringsXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0" uniqueCount="0"/>`;
+
+  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>`;
+
+  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`;
+
+  const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+</Types>`;
+
+  const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="大乐透开奖数据" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+
+  const files={
+    '[Content_Types].xml':str(contentTypes),
+    '_rels/.rels':str(rels),
+    'xl/workbook.xml':str(workbook),
+    'xl/_rels/workbook.xml.rels':str(wbRels),
+    'xl/worksheets/sheet1.xml':str(sheet),
+    'xl/styles.xml':str(styles),
+    'xl/sharedStrings.xml':str(sharedStringsXml),
+  };
+
+  let centralDir=[], offset=0, entries=[];
+  const sorted=Object.keys(files).sort();
+  for(const name of sorted){
+    const data=files[name];
+    const comp=bufToArray(genLocalHeader(name));
+    const crc=crc32(data);
+    entries.push({name,data,crc,size:data.length});
+    offset+=comp.length+data.length;
+  }
+  let cdOffset=offset;
+  for(const e of entries){
+    centralDir.push(...bufToArray(genCentralDir(e.name,e.crc,e.size,cdOffset-(offset-=e.data.length+genLocalHeader(e.name).length))));
+  }
+  const cdSize=centralDir.length;
+  centralDir.push(...bufToArray(eocd(entries.length,cdSize,cdOffset)));
+
+  let firstOffset=0;
+  const final=[];
+  for(const e of entries){
+    final.push(...bufToArray(genLocalHeader(e.name)));
+    final.push(...e.data);
+  }
+  final.push(...centralDir);
+  return new Uint8Array(final);
+}
+
+function genLocalHeader(name){
+  const n=str(name);
+  const h=new Uint8Array(30+n.length);
+  setU32(h,0,0x04034b50);setU16(h,4,20);setU16(h,6,0);setU16(h,8,0);
+  setU32(h,10,0);setU32(h,14,0);setU32(h,18,0);
+  setU16(h,26,n.length);setU32(h,28,0);
+  h.set(n,30);
+  return h;
+}
+
+function genCentralDir(name,crc,size,off){
+  const n=str(name);
+  const h=new Uint8Array(46+n.length);
+  setU32(h,0,0x02014b50);setU16(h,4,20);setU16(h,6,20);setU16(h,8,0);
+  setU16(h,10,0);setU32(h,12,0);setU32(h,16,crc);setU32(h,20,size);
+  setU32(h,24,size);setU16(h,28,n.length);setU16(h,30,0);
+  setU16(h,32,0);setU16(h,34,0);setU32(h,36,0);setU32(h,40,0);
+  setU32(h,42,off);
+  h.set(n,46);
+  return h;
+}
+
+function eocd(count,cdSize,cdOff){
+  const h=new Uint8Array(22);
+  setU32(h,0,0x06054b50);setU16(h,4,0);setU16(h,6,0);
+  setU16(h,8,count);setU16(h,10,count);setU32(h,12,cdSize);
+  setU32(h,16,cdOff);setU16(h,20,0);
+  return h;
+}
+
+function str(s){return new TextEncoder().encode(s);}
+function setU16(a,o,v){a[o]=v&0xff;a[o+1]=(v>>8)&0xff;}
+function setU32(a,o,v){a[o]=v&0xff;a[o+1]=(v>>8)&0xff;a[o+2]=(v>>16)&0xff;a[o+3]=(v>>24)&0xff;}
+function bufToArray(b){return Array.from(b);}
+
+function crc32(data){
+  let crc=0xFFFFFFFF;
+  for(let i=0;i<data.length;i++){
+    crc^=data[i];
+    for(let j=0;j<8;j++)crc=(crc>>>1)^(crc&1?0xEDB88320:0);
+  }
+  return (crc^0xFFFFFFFF)>>>0;
+}
+</script>
+</body>
+</html>
