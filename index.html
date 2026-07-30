@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>大乐透数据下载</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:linear-gradient(135deg,#c0392b,#e74c3c);
+  min-height:100vh;display:flex;justify-content:center;align-items:center;padding:16px;
+}
+.card{
+  background:#fff;border-radius:16px;padding:24px;width:100%;max-width:420px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+}
+h1{font-size:22px;text-align:center;color:#c0392b;margin-bottom:4px}
+.sub{text-align:center;color:#999;font-size:13px;margin-bottom:20px}
+
+.row{margin-bottom:14px}
+.row label{display:block;font-size:14px;color:#555;margin-bottom:6px;font-weight:600}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn-num{
+  flex:1;min-width:60px;padding:10px 0;border:2px solid #e0e0e0;
+  border-radius:10px;background:#fafafa;font-size:14px;font-weight:700;
+  color:#555;cursor:pointer;text-align:center;transition:all .2s;
+}
+.btn-num:active,.btn-num.active{border-color:#e74c3c;background:#fdecea;color:#c0392b}
+input[type=number]{
+  width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:10px;
+  font-size:16px;text-align:center;outline:none;transition:border .2s;
+}
+input[type=number]:focus{border-color:#e74c3c}
+input[type=number]::placeholder{color:#ccc}
+
+.chks{display:flex;gap:16px;flex-wrap:wrap}
+.chks label{display:flex;align-items:center;gap:8px;font-weight:400;font-size:15px;cursor:pointer;color:#333}
+.chks input[type=checkbox]{width:20px;height:20px;accent-color:#e74c3c}
+
+.btn-go{
+  width:100%;padding:14px;background:linear-gradient(135deg,#c0392b,#e74c3c);
+  color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;
+  cursor:pointer;transition:transform .1s,opacity .2s;
+}
+.btn-go:active{transform:scale(.97)}
+.btn-go:disabled{opacity:.5;transform:none}
+
+.progress-wrap{margin-top:16px;display:none}
+.progress-bar{height:8px;background:#eee;border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#e74c3c,#c0392b);border-radius:4px;width:0%;transition:width .3s}
+.progress-txt{text-align:center;font-size:13px;color:#888;margin-top:6px}
+
+.preview{margin-top:16px;display:none}
+.preview h3{font-size:15px;color:#333;margin-bottom:10px}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#c0392b;color:#fff;padding:8px 6px;text-align:center;font-weight:600;position:sticky;top:0}
+td{padding:8px 6px;text-align:center;border-bottom:1px solid #f0f0f0}
+.fnum{color:#c0392b;font-weight:700}
+.bnum{color:#2980b9;font-weight:700}
+
+.dl-row{margin-top:14px;display:none;gap:8px}
+.dl-row.show{display:flex}
+.dl-btn{
+  flex:1;padding:10px;border-radius:10px;font-size:14px;font-weight:600;
+  border:2px solid #e74c3c;cursor:pointer;text-align:center;transition:all .2s;
+}
+.dl-btn.js{background:#fdecea;color:#c0392b}
+.dl-btn.xlsx{background:#e74c3c;color:#fff}
+.dl-btn:active{opacity:.7}
+
+.msg{text-align:center;font-size:14px;color:#e74c3c;margin-top:10px;min-height:20px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>大乐透数据下载</h1>
+  <p class="sub">点击下方按钮加载数据，然后选择格式下载</p>
+
+  <div class="row">
+    <label>下载期数</label>
+    <div class="btns" id="periodBtns">
+      <div class="btn-num" data-n="50">50 期</div>
+      <div class="btn-num active" data-n="120">120 期</div>
+      <div class="btn-num" data-n="500">500 期</div>
+      <div class="btn-num" data-n="1000">1000 期</div>
+    </div>
+    <input type="number" id="customPeriod" placeholder="或手动输入期数" min="1" max="2000" style="margin-top:8px">
+  </div>
+
+  <div class="row">
+    <label>输出格式</label>
+    <div class="chks">
+      <label><input type="checkbox" id="chkJS" checked> all_draws.js</label>
+      <label><input type="checkbox" id="chkXLSX" checked> 1.xlsx</label>
+    </div>
+  </div>
+
+  <button class="btn-go" id="btnGo" onclick="startFetch()">加载数据</button>
+  <div class="msg" id="msg"></div>
+
+  <div class="progress-wrap" id="progWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+    <p class="progress-txt" id="progTxt">准备中...</p>
+  </div>
+
+  <div class="preview" id="preview">
+    <h3>最新开奖号码</h3>
+    <div class="table-wrap"><table id="previewTable"></table></div>
+  </div>
+
+  <div class="dl-row" id="dlRow">
+    <div class="dl-btn js" id="dlJS" onclick="dlJSON()">下载 JS</div>
+    <div class="dl-btn xlsx" id="dlXLSX" onclick="dlXLSX()">下载 Excel</div>
+  </div>
+</div>
+
+<script>
+let allDraws=[];
+
+document.getElementById('periodBtns').addEventListener('click',e=>{
+  const btn=e.target.closest('.btn-num');
+  if(!btn)return;
+  document.querySelectorAll('.btn-num').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('customPeriod').value='';
+});
+
+function getPeriod(){
+  const c=document.getElementById('customPeriod').value;
+  if(c&&parseInt(c)>0)return Math.min(parseInt(c),2000);
+  const a=document.querySelector('.btn-num.active');
+  return a?parseInt(a.dataset.n):120;
+}
+
+async function startFetch(){
+  const period=getPeriod();
+  const wantJS=document.getElementById('chkJS').checked;
+  const wantXLSX=document.getElementById('chkXLSX').checked;
+  if(!wantJS&&!wantXLSX){setMsg('请至少选择一种格式');return}
+
+  const btn=document.getElementById('btnGo');
+  btn.disabled=true;btn.textContent='加载中...';
+  document.getElementById('progWrap').style.display='block';
+  document.getElementById('preview').style.display='none';
+  document.getElementById('dlRow').style.display='none';
+  setMsg('正在从仓库加载数据...');
+
+  allDraws=[];
+  try{
+    await fetchAll(period);
+    if(allDraws.length===0)throw new Error('未获取到数据，请先在 Actions 中运行数据更新');
+    showPreview();
+    document.getElementById('dlRow').style.display='flex';
+    setMsg(`加载完成！共 ${allDraws.length} 期，点击下方按钮下载`);
+  }catch(e){
+    console.error(e);
+    setMsg('加载失败: '+e.message+'（请在 GitHub Actions 运行"更新大乐透数据"）');
+  }finally{
+    btn.disabled=false;btn.textContent='加载数据';
+    document.getElementById('progWrap').style.display='none';
+  }
+}
+
+function setProg(pct,txt){
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progTxt').textContent=txt;
+}
+function setMsg(t){document.getElementById('msg').textContent=t;}
+
+// === 核心：无代理架构 ===
+// GitHub Actions 在服务器端抓取数据 → 生成 all_draws.js → 前端直接加载
+// 无需任何 CORS 代理，完美避开浏览器跨域限制
+
+async function loadFromRepo(period){
+  // 直接加载仓库里已生成的 all_draws.js（同源，无CORS问题）
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),15000);
+  try{
+    const r=await fetch('all_draws.js',{signal:ctrl.signal,cache:'no-cache'});
+    if(!r.ok){
+      if(r.status===404)throw new Error('数据文件不存在，请先运行 GitHub Actions 更新数据');
+      throw new Error('请求失败 '+r.status);
+    }
+    const code=await r.text();
+    if(!code||code.trim()==='')throw new Error('数据文件为空');
+    
+    // 执行 JS 文件获取 ALL_DRAWS 数组
+    const fn=new Function(code+'\nreturn ALL_DRAWS;');
+    const draws=fn();
+    if(!Array.isArray(draws)||draws.length===0)throw new Error('数据为空，请先运行 GitHub Actions 更新数据');
+    
+    // 按请求期数截取
+    // all_draws.js 存储的是升序（从旧到新），最新数据在最后
+    // 我们需要取最后 period 期数据，然后转成降序（最新在前）
+    allDraws=draws.slice(-period).reverse();
+    if(allDraws.length>period)allDraws=allDraws.slice(0,period);
+    return allDraws.length;
+  }catch(e){
+    console.error('加载数据失败:',e);
+    throw e;
+  }finally{clearTimeout(t);}
+}
+
+async function fetchAll(period){
+  // 从仓库加载（无代理，推荐方式）
+  setMsg('正在加载数据...');
+  setProg(10,'加载 all_draws.js...');
+  const count=await loadFromRepo(period);
+  setProg(90,`加载完成 ${count} 期`);
+  return count;
+}
+
+function showPreview(){
+  const t=document.getElementById('previewTable');
+  let h='<thead><tr><th>期号</th><th>日期</th><th colspan="5">前区</th><th colspan="2">后区</th></tr></thead><tbody>';
+  for(let i=0;i<Math.min(10,allDraws.length);i++){
+    const d=allDraws[i];
+    h+=`<tr><td>${d.issue}</td><td>${d.date.slice(5)}</td>`;
+    d.front.forEach(n=>h+=`<td class="fnum">${String(n).padStart(2,'0')}</td>`);
+    d.back.forEach(n=>h+=`<td class="bnum">${String(n).padStart(2,'0')}</td>`);
+    h+='</tr>';
+  }
+  h+='</tbody>';
+  t.innerHTML=h;
+  document.getElementById('preview').style.display='block';
+}
+
+function genJS(){
+  let out=`// 大乐透开奖数据 — ${allDraws.length}期\n// 生成时间: ${new Date().toLocaleString()}\n// 数据来源: 中国体彩官方API\n\nconst ALL_DRAWS = [\n`;
+  for(let i=allDraws.length-1;i>=0;i--){
+    const d=allDraws[i];
+    out+=`  {issue:"${d.issue}",date:"${d.date}",front:[${d.front.join(',')}],back:[${d.back.join(',')}],front_str:"${d.front.map(n=>String(n).padStart(2,'0')).join(' ')}",back_str:"${d.back.map(n=>String(n).padStart(2,'0')).join(' ')}"}`;
+    out+=i>0?',\n':'';
+  }
+  out+=`\n];\n`;
+  return out;
+}
+
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function dlJSON(){
+  downloadBlob(new Blob(['\uFEFF'+genJS()],{type:'text/javascript;charset=utf-8'}),'all_draws.js');
+}
+
+function dlXLSX(){
+  setMsg('生成 Excel 中...');
+  try{
+    const html=genExcelHTML();
+    const blob=new Blob(['\uFEFF'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+    downloadBlob(blob,'大乐透开奖数据.xls');
+    setMsg('Excel 下载完成！');
+  }catch(e){setMsg('Excel生成失败: '+e.message);}
+}
+
+function genExcelHTML(){
+  const wd=['日','一','二','三','四','五','六'];
+  let html=`
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8">
+<!--[if gte mso 9]>
+<xml>
+  <x:ExcelWorkbook>
+    <x:ExcelWorksheets>
+      <x:ExcelWorksheet>
+        <x:Name>大乐透开奖数据</x:Name>
+        <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+      </x:ExcelWorksheet>
+    </x:ExcelWorksheets>
+  </x:ExcelWorkbook>
+</xml>
+<![endif]-->
+</head>
+<body>
+<table border="1" cellspacing="0" cellpadding="3" style="border-collapse:collapse">
+<thead>
+<tr style="background:#C0392b;color:#fff;font-weight:bold">
+  <th>期号</th><th>日期</th><th>星期</th>
+  <th>前1</th><th>前2</th><th>前3</th><th>前4</th><th>前5</th>
+  <th>后1</th><th>后2</th>
+</tr>
+</thead>
+<tbody>`;
+
+  for(const d of allDraws){
+    const day=wd[new Date(d.date).getDay()]||'';
+    html+=`<tr>
+<td>${d.issue}</td><td>${d.date}</td><td>${day}</td>
+<td style="color:#C0392b;font-weight:bold">${String(d.front[0]).padStart(2,'0')}</td>
+<td style="color:#C0392b;font-weight:bold">${String(d.front[1]).padStart(2,'0')}</td>
+<td style="color:#C0392b;font-weight:bold">${String(d.front[2]).padStart(2,'0')}</td>
+<td style="color:#C0392b;font-weight:bold">${String(d.front[3]).padStart(2,'0')}</td>
+<td style="color:#C0392b;font-weight:bold">${String(d.front[4]).padStart(2,'0')}</td>
+<td style="color:#2980b9;font-weight:bold">${String(d.back[0]).padStart(2,'0')}</td>
+<td style="color:#2980b9;font-weight:bold">${String(d.back[1]).padStart(2,'0')}</td>
+</tr>`;
+  }
+
+  html+=`</tbody></table></body></html>`;
+  return html;
+}
+</script>
+</body>
+</html>
