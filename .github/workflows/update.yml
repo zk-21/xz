@@ -7,19 +7,20 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      
+        
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       
       - name: 安装依赖
-        run: pip install openpyxl
-      
+        run: pip install requests openpyxl
+        
       - name: 下载大乐透数据
         run: python scripts/update_data.py
-      
+        
       - name: 提交更新
         run: |
           git config user.name "github-actions[bot]"
