@@ -1,0 +1,29 @@
+name: 更新大乐透数据
+on:
+  schedule:
+    - cron: '30 13,14 * * *'  # 每天21:30和22:30（UTC+8 大乐透开奖后）
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: 安装依赖
+        run: pip install openpyxl
+      
+      - name: 下载大乐透数据
+        run: python scripts/update_data.py
+      
+      - name: 提交更新
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add all_draws.js
+          git diff --staged --quiet || git commit -m "自动更新数据 $(date +%Y-%m-%d)"
+          git push
