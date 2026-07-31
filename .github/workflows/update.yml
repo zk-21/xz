@@ -1,4 +1,8 @@
 name: 更新大乐透数据
+
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: '30 13,14 * * *'  # 每天21:30和22:30（UTC+8 大乐透开奖后）
@@ -10,6 +14,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
         
       - uses: actions/setup-python@v5
         with:
@@ -32,5 +39,5 @@ jobs:
             echo "无新数据，跳过提交"
           else
             git commit -m "自动更新数据 $(date +%Y-%m-%d)"
-            git push
+            git push origin main
           fi
