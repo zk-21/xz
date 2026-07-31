@@ -9,19 +9,24 @@
 """
 import json
 import os
+import re
 import sys
 import time
 import subprocess
+import urllib.request
+import urllib.parse
+import ssl
 
 try:
     import requests
     HAS_REQUESTS = True
 except ImportError:
-    print("错误: 请先安装 requests 库")
-    print("  pip install requests")
-    sys.exit(1)
+    HAS_REQUESTS = False
 
-API_BASE = "https://webapi.sporttery.cn/gateway/lottery/"
+API_ENDPOINTS = [
+    "https://webapi.sporttery.cn/gateway/lottery/",
+    "http://webapi.sporttery.cn/gateway/lottery/",
+]
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://www.lottery.gov.cn/",
@@ -31,8 +36,8 @@ PAGE_SIZE = 30
 OUT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def fetch_page(page_no, timeout=30):
-    """获取单页数据"""
+def fetch_page(page_no, timeout=60):
+    """获取单页数据（带多端点重试）"""
     params = {
         "gameNo": "85",
         "provinceId": "0",
@@ -40,17 +45,112 @@ def fetch_page(page_no, timeout=30):
         "isVerify": "1",
         "pageNo": str(page_no),
     }
-    resp = requests.get(
-        API_BASE + "getHistoryPageListV1.qry",
-        params=params,
-        headers=HEADERS,
-        timeout=timeout,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data.get("success"):
-        raise Exception(data.get("errorMessage", "API error"))
-    return data["value"]["list"]
+
+    last_error = None
+    for base_url in API_ENDPOINTS:
+        try:
+            full_url = base_url + "getHistoryPageListV1.qry"
+            if HAS_REQUESTS:
+                resp = requests.get(full_url, params=params, headers=HEADERS, timeout=timeout, verify=False)
+                resp.raise_for_status()
+                data = resp.json()
+            else:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                query = urllib.parse.urlencode(params)
+                req = urllib.request.Request(full_url + "?" + query, headers=HEADERS)
+                with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+
+            if data.get("success"):
+                return data["value"]["list"]
+            else:
+                last_error = Exception(data.get("errorMessage", "API error"))
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise last_error or Exception("所有 API 端点都失败")
+
+
+def fetch_web_fallback(timeout=60):
+    """网页爬虫备用方案"""
+    draws = []
+    urls = [
+        "https://www.lottery.gov.cn/kj/kjlb.html?dlt",
+        "http://www.lottery.gov.cn/kj/kjlb.html?dlt",
+    ]
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    for url in urls:
+        try:
+            print(f"  尝试网页: {url}")
+            req = urllib.request.Request(url, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+
+            # 找 JSON 数据
+            json_match = re.search(r'var\s+kjData\s*=\s*(\[.*?\]);', raw, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group(1))
+                for item in data:
+                    if isinstance(item, dict):
+                        issue = item.get("lotteryDrawNum", item.get("issue", ""))
+                        date = item.get("lotteryDrawTime", item.get("date", ""))
+                        nums_str = item.get("lotteryDrawResult", item.get("numbers", ""))
+                        if isinstance(nums_str, str):
+                            nums = [int(x) for x in nums_str.split() if x.isdigit()]
+                        elif isinstance(nums_str, list):
+                            nums = [int(x) for x in nums_str]
+                        else:
+                            nums = []
+                        if issue and date and len(nums) >= 7:
+                            draws.append({
+                                "issue": str(issue),
+                                "date": str(date),
+                                "front": sorted(nums[:5]),
+                                "back": sorted(nums[5:7]),
+                            })
+                if draws:
+                    print(f"  网页解析到 {len(draws)} 期")
+                    return draws[:PERIOD]
+
+            # 正则提取
+            tr_pattern = r'<tr[^>]*>(.*?)</tr>'
+            td_pattern = r'<td[^>]*>(.*?)</td>'
+            tr_matches = re.findall(tr_pattern, raw, re.DOTALL)
+            for tr_content in tr_matches:
+                td_matches = re.findall(td_pattern, tr_content, re.DOTALL)
+                nums = []
+                issue = ""
+                date = ""
+                for td in td_matches:
+                    td_clean = re.sub(r'<[^>]+>', '', td).strip()
+                    if re.match(r'^\d{5}$', td_clean) and not issue:
+                        issue = td_clean
+                    elif re.match(r'^\d{4}-\d{2}-\d{2}$', td_clean) and not date:
+                        date = td_clean
+                    elif re.match(r'^\d{1,2}$', td_clean):
+                        n = int(td_clean)
+                        if 1 <= n <= 35:
+                            nums.append(n)
+                if issue and date and len(nums) >= 7:
+                    draws.append({
+                        "issue": issue,
+                        "date": date,
+                        "front": sorted(nums[:5]),
+                        "back": sorted(nums[5:7]),
+                    })
+            if draws:
+                print(f"  网页解析到 {len(draws)} 期")
+                return draws[:PERIOD]
+        except Exception as e:
+            print(f"  网页失败: {e}")
+            continue
+    return draws
 
 
 def fetch_all():
@@ -60,6 +160,9 @@ def fetch_all():
     draws = []
 
     print(f"获取 {PERIOD} 期数据，共 {total_pages} 页")
+    print(f"使用 {'requests' if HAS_REQUESTS else 'urllib'} 库")
+
+    api_success = False
     for p in range(1, total_pages + 1):
         print(f"  第 {p}/{total_pages} 页...", end=" ", flush=True)
         try:
@@ -84,12 +187,26 @@ def fetch_all():
             print(f"已获取 {len(draws)} 期")
             if len(draws) >= PERIOD:
                 break
+            api_success = True
             time.sleep(0.3)
         except Exception as e:
-            print(f"错误: {e}")
+            print(f"错误: {type(e).__name__}")
             print("  跳过此页")
             time.sleep(1)
             continue
+
+    # API 失败时使用网页爬虫备用
+    if not api_success or len(draws) < 10:
+        print(f"\nAPI 获取不足（仅 {len(draws)} 期），尝试网页爬虫...")
+        web_draws = fetch_web_fallback()
+        if web_draws:
+            for d in web_draws:
+                if d["issue"] not in seen:
+                    draws.append(d)
+                    seen.add(d["issue"])
+            draws.sort(key=lambda d: int(d["issue"]), reverse=True)
+            draws = draws[:PERIOD]
+            print(f"合并后共 {len(draws)} 期")
 
     draws.sort(key=lambda d: int(d["issue"]), reverse=True)
     return draws[:PERIOD]
