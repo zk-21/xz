@@ -72,6 +72,7 @@ td{padding:8px 6px;text-align:center;border-bottom:1px solid #f0f0f0}
 
 .msg{text-align:center;font-size:14px;color:#e74c3c;margin-top:10px;min-height:20px}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="card">
@@ -254,59 +255,24 @@ function dlJSON(){
 function dlXLSX(){
   setMsg('生成 Excel 中...');
   try{
-    const html=genExcelHTML();
-    const blob=new Blob(['\uFEFF'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
-    downloadBlob(blob,'大乐透开奖数据.xls');
+    if(typeof XLSX==='undefined')throw new Error('SheetJS 未加载，请检查网络');
+    const wd=['日','一','二','三','四','五','六'];
+    const headers=['期号','开奖时间','周','前区一','前区二','前区三','前区四','前区五','后区一','后区二'];
+    const aoa=[headers];
+    for(const d of allDraws){
+      const day=wd[new Date(d.date).getDay()]||'';
+      aoa.push([d.issue,d.date,day,
+        d.front[0],d.front[1],d.front[2],d.front[3],d.front[4],
+        d.back[0],d.back[1]]);
+    }
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:8},{wch:12},{wch:4},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6}];
+    ws['!freeze']={xSplit:0,ySplit:1};
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'大乐透开奖数据');
+    XLSX.writeFile(wb,'大乐透开奖数据.xlsx');
     setMsg('Excel 下载完成！');
   }catch(e){setMsg('Excel生成失败: '+e.message);}
-}
-
-function genExcelHTML(){
-  const wd=['日','一','二','三','四','五','六'];
-  let html=`
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="UTF-8">
-<!--[if gte mso 9]>
-<xml>
-  <x:ExcelWorkbook>
-    <x:ExcelWorksheets>
-      <x:ExcelWorksheet>
-        <x:Name>大乐透开奖数据</x:Name>
-        <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
-      </x:ExcelWorksheet>
-    </x:ExcelWorksheets>
-  </x:ExcelWorkbook>
-</xml>
-<![endif]-->
-</head>
-<body>
-<table border="1" cellspacing="0" cellpadding="3" style="border-collapse:collapse">
-<thead>
-<tr style="background:#C0392b;color:#fff;font-weight:bold">
-  <th>期号</th><th>开奖时间</th><th>周</th>
-  <th>前区一</th><th>前区二</th><th>前区三</th><th>前区四</th><th>前区五</th>
-  <th>后区一</th><th>后区二</th>
-</tr>
-</thead>
-<tbody>`;
-
-  for(const d of allDraws){
-    const day=wd[new Date(d.date).getDay()]||'';
-    html+=`<tr>
-<td>${d.issue}</td><td>${d.date}</td><td>${day}</td>
-<td style="color:#C0392b;font-weight:bold">${String(d.front[0]).padStart(2,'0')}</td>
-<td style="color:#C0392b;font-weight:bold">${String(d.front[1]).padStart(2,'0')}</td>
-<td style="color:#C0392b;font-weight:bold">${String(d.front[2]).padStart(2,'0')}</td>
-<td style="color:#C0392b;font-weight:bold">${String(d.front[3]).padStart(2,'0')}</td>
-<td style="color:#C0392b;font-weight:bold">${String(d.front[4]).padStart(2,'0')}</td>
-<td style="color:#2980b9;font-weight:bold">${String(d.back[0]).padStart(2,'0')}</td>
-<td style="color:#2980b9;font-weight:bold">${String(d.back[1]).padStart(2,'0')}</td>
-</tr>`;
-  }
-
-  html+=`</tbody></table></body></html>`;
-  return html;
 }
 </script>
 </body>
