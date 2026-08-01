@@ -249,13 +249,15 @@ function downloadBlob(blob,name){
 }
 
 function dlJSON(){
-  downloadBlob(new Blob(['\uFEFF'+genJS()],{type:'text/javascript;charset=utf-8'}),'all_draws.js');
+  const n=allDraws.length;
+  downloadBlob(new Blob(['\uFEFF'+genJS()],{type:'text/javascript;charset=utf-8'}),`大乐透${n}期.js`);
 }
 
 function dlXLSX(){
   setMsg('生成 Excel 中...');
   try{
     if(typeof XLSX==='undefined')throw new Error('SheetJS 未加载，请检查网络');
+    const n=allDraws.length;
     const wd=['日','一','二','三','四','五','六'];
     const headers=['期号','开奖时间','周','前区一','前区二','前区三','前区四','前区五','后区一','后区二'];
     const aoa=[headers];
@@ -270,7 +272,7 @@ function dlXLSX(){
     ws['!freeze']={xSplit:0,ySplit:1};
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'大乐透开奖数据');
-    XLSX.writeFile(wb,'大乐透开奖数据.xlsx');
+    XLSX.writeFile(wb,`大乐透${n}期.xlsx`);
     setMsg('Excel 下载完成！');
   }catch(e){setMsg('Excel生成失败: '+e.message);}
 }
