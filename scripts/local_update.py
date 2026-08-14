@@ -352,7 +352,7 @@ def save_js(draws):
         f"// 本地更新: {time.strftime('%Y-%m-%d %H:%M')}",
         "// 数据来源: 中国体彩官方API / 500彩票网",
         "",
-        "const ALL_DRAWS = [",
+        "var ALL_DRAWS = [",
     ]
     for i, d in enumerate(reversed(draws)):
         front_str = " ".join(f"{n:02d}" for n in d["front"])
