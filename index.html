@@ -71,6 +71,10 @@ td{padding:8px 6px;text-align:center;border-bottom:1px solid #f0f0f0}
 .dl-btn:active{opacity:.7}
 
 .msg{text-align:center;font-size:14px;color:#e74c3c;margin-top:10px;min-height:20px}
+#qResult table td{text-align:left}
+#qResult table td[rowspan]{text-align:center}
+.q-hit{color:#c0392b;font-weight:700}
+#qResult table tr td:last-child{white-space:nowrap}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -88,6 +92,15 @@ td{padding:8px 6px;text-align:center;border-bottom:1px solid #f0f0f0}
       <div class="btn-num" data-n="1000">1000 期</div>
     </div>
     <input type="number" id="customPeriod" placeholder="或手动输入期数" min="1" max="2000" style="margin-top:8px">
+  </div>
+
+  <div class="row">
+    <label>期号范围（可选：只填开始=开始期号起往后取N期；只填结束=截止结束期号往前取N期；都填=区间内全部）</label>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input type="number" id="startIssue" placeholder="开始期号，如 2025001" min="19001" max="2999999" style="flex:1">
+      <span style="color:#999;font-size:14px;white-space:nowrap">至</span>
+      <input type="number" id="endIssue" placeholder="结束期号，如 2025088" min="19001" max="2999999" style="flex:1">
+    </div>
   </div>
 
   <div class="row">
@@ -115,6 +128,18 @@ td{padding:8px 6px;text-align:center;border-bottom:1px solid #f0f0f0}
     <div class="dl-btn js" id="dlJS" onclick="dlJSON()">下载 JS</div>
     <div class="dl-btn xlsx" id="dlXLSX" onclick="dlXLSX()">下载 Excel</div>
   </div>
+
+  <div class="row" style="border-top:1px solid #eee;padding-top:16px;margin-top:16px">
+    <label>号码查询（分前后区输入，找出包含它们的开奖期，并显示上下期）</label>
+    <input type="text" id="qFrontNums" placeholder="前区号码（1-35），逗号/空格分隔，如 8,9,10" style="margin-bottom:8px">
+    <input type="text" id="qBackNums" placeholder="后区号码（1-12），逗号/空格分隔，如 2,5" style="margin-bottom:8px">
+    <button class="btn-go" id="btnQuery" onclick="startQuery()" style="font-size:15px;padding:12px">查询开奖号码</button>
+  </div>
+
+  <div class="preview" id="qPreview">
+    <h3 id="qTitle">查询结果</h3>
+    <div class="table-wrap" id="qResult"></div>
+  </div>
 </div>
 
 <script>
@@ -135,8 +160,20 @@ function getPeriod(){
   return a?parseInt(a.dataset.n):120;
 }
 
+function getIssueRange(){
+  const s=document.getElementById('startIssue').value.trim();
+  const e=document.getElementById('endIssue').value.trim();
+  const start=s&&parseInt(s)>0?parseInt(s):null;
+  const end=e&&parseInt(e)>0?parseInt(e):null;
+  return {start,end};
+}
+
 async function startFetch(){
   const period=getPeriod();
+  const range=getIssueRange();
+  if(range.start!==null&&range.end!==null&&range.start>range.end){
+    setMsg('开始期号不能大于结束期号');return;
+  }
   const wantJS=document.getElementById('chkJS').checked;
   const wantXLSX=document.getElementById('chkXLSX').checked;
   if(!wantJS&&!wantXLSX){setMsg('请至少选择一种格式');return}
@@ -150,8 +187,8 @@ async function startFetch(){
 
   allDraws=[];
   try{
-    await fetchAll(period);
-    if(allDraws.length===0)throw new Error('未获取到数据，请先在 Actions 中运行数据更新');
+    await fetchAll(period, range);
+    if(allDraws.length===0)throw new Error('该期号范围内没有数据，请检查期号范围');
     showPreview();
     document.getElementById('dlRow').style.display='flex';
     setMsg(`加载完成！共 ${allDraws.length} 期，点击下方按钮下载`);
@@ -174,7 +211,7 @@ function setMsg(t){document.getElementById('msg').textContent=t;}
 // GitHub Actions 在服务器端抓取数据 → 生成 all_draws.js → 前端直接加载
 // 无需任何 CORS 代理，完美避开浏览器跨域限制
 
-async function loadFromRepo(period){
+async function loadFromRepo(period, range){
   // 直接加载仓库里已生成的 all_draws.js（同源，无CORS问题）
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),15000);
@@ -192,11 +229,28 @@ async function loadFromRepo(period){
     const draws=fn();
     if(!Array.isArray(draws)||draws.length===0)throw new Error('数据为空，请先运行 GitHub Actions 更新数据');
     
-    // 按请求期数截取
     // all_draws.js 存储的是升序（从旧到新），最新数据在最后
-    // 我们需要取最后 period 期数据，然后转成降序（最新在前）
-    allDraws=draws.slice(-period).reverse();
-    if(allDraws.length>period)allDraws=allDraws.slice(0,period);
+    let list;
+    if(range.start!==null&&range.end!==null){
+      // 起止期号都填：按范围过滤
+      list=draws.filter(d=>{
+        const n=parseInt(d.issue);
+        if(n<range.start)return false;
+        if(n>range.end)return false;
+        return true;
+      });
+    }else if(range.start!==null){
+      // 只填开始期号：从开始期号起算，往后取 period 期
+      list=draws.filter(d=>parseInt(d.issue)>=range.start).slice(0,period);
+    }else if(range.end!==null){
+      // 只填结束期号：取到结束期号为止的前 period 期
+      list=draws.filter(d=>parseInt(d.issue)<=range.end).slice(-period);
+    }else{
+      // 起止期号都没填：取最后 period 期（最新）
+      list=draws.slice(-period);
+    }
+    // 转成降序（最新在前）
+    allDraws=list.reverse();
     return allDraws.length;
   }catch(e){
     console.error('加载数据失败:',e);
@@ -204,11 +258,11 @@ async function loadFromRepo(period){
   }finally{clearTimeout(t);}
 }
 
-async function fetchAll(period){
+async function fetchAll(period, range){
   // 从仓库加载（无代理，推荐方式）
   setMsg('正在加载数据...');
   setProg(10,'加载 all_draws.js...');
-  const count=await loadFromRepo(period);
+  const count=await loadFromRepo(period, range);
   setProg(90,`加载完成 ${count} 期`);
   return count;
 }
@@ -229,7 +283,7 @@ function showPreview(){
 }
 
 function genJS(){
-  let out=`// 大乐透开奖数据 — ${allDraws.length}期\n// 生成时间: ${new Date().toLocaleString()}\n// 数据来源: 中国体彩官方API\n\nconst ALL_DRAWS = [\n`;
+  let out=`// 大乐透开奖数据 — ${allDraws.length}期\n// 生成时间: ${new Date().toLocaleString()}\n// 数据来源: 中国体彩官方API\n\nvar ALL_DRAWS = [\n`;
   for(let i=allDraws.length-1;i>=0;i--){
     const d=allDraws[i];
     out+=`  {issue:"${d.issue}",date:"${d.date}",front:[${d.front.join(',')}],back:[${d.back.join(',')}],front_str:"${d.front.map(n=>String(n).padStart(2,'0')).join(' ')}",back_str:"${d.back.map(n=>String(n).padStart(2,'0')).join(' ')}"}`;
@@ -275,6 +329,84 @@ function dlXLSX(){
     XLSX.writeFile(wb,`大乐透${n}期.xlsx`);
     setMsg('Excel 下载完成！');
   }catch(e){setMsg('Excel生成失败: '+e.message);}
+}
+
+// === 号码查询 ===
+function pad2(n){return String(n).padStart(2,'0');}
+
+function fmtDrawNum(n, hitSet){
+  return `<span class="${hitSet.has(n)?'q-hit':''}">${pad2(n)}</span>`;
+}
+
+function fmtDrawRow(d, fHitSet, bHitSet){
+  const frontHtml=d.front.map(n=>fmtDrawNum(n,fHitSet)).join(' ');
+  const backHtml=d.back.map(n=>fmtDrawNum(n,bHitSet)).join(' ');
+  return `${frontHtml} | ${backHtml}`;
+}
+
+function startQuery(){
+  const fraw=document.getElementById('qFrontNums').value.trim();
+  const braw=document.getElementById('qBackNums').value.trim();
+  if(!fraw && !braw){setMsg('请输入前区或后区号码');return;}
+  // 解析前区（1-35）与后区（1-12）
+  const fnums=fraw?fraw.split(/[\s,，、;；]+/).map(s=>parseInt(s)).filter(n=>!isNaN(n)&&n>=1&&n<=35):[];
+  const bnums=braw?braw.split(/[\s,，、;；]+/).map(s=>parseInt(s)).filter(n=>!isNaN(n)&&n>=1&&n<=12):[];
+  if(fraw && fnums.length===0){setMsg('前区号码无效（应为 1-35）');return;}
+  if(braw && bnums.length===0){setMsg('后区号码无效（应为 1-12）');return;}
+  const funiq=[...new Set(fnums)];
+  const buniq=[...new Set(bnums)];
+
+  // allDraws 为降序（最新在前）。前区需包含全部前区输入 且 后区需包含全部后区输入
+  const matches=[];
+  for(let i=0;i<allDraws.length;i++){
+    const d=allDraws[i];
+    const fHit=funiq.filter(n=>d.front.includes(n));
+    const bHit=buniq.filter(n=>d.back.includes(n));
+    const fOk=funiq.length===0||fHit.length===funiq.length;
+    const bOk=buniq.length===0||bHit.length===buniq.length;
+    if(fOk&&bOk)matches.push({i,d,fHit,bHit});
+  }
+  // 查询描述
+  const desc=[];
+  if(funiq.length)desc.push('前区 '+funiq.join(','));
+  if(buniq.length)desc.push('后区 '+buniq.join(','));
+  const descText=desc.join('，');
+  if(matches.length===0){
+    document.getElementById('qPreview').style.display='block';
+    document.getElementById('qTitle').textContent='查询结果：无匹配';
+    document.getElementById('qResult').innerHTML='<p style="text-align:center;color:#999;padding:10px">没有开奖期包含这些号码</p>';
+    setMsg(`共找到 0 期`);
+    return;
+  }
+  // 渲染结果
+  let h='<table><thead><tr><th>期号</th><th>日期</th><th>开奖号码（高亮=命中）</th></tr></thead><tbody>';
+  for(const m of matches){
+    const d=m.d;
+    const fHitSet=new Set(m.fHit);
+    const bHitSet=new Set(m.bHit);
+    h+=`<tr><td rowspan="3" style="font-weight:700;color:#c0392b">${d.issue}</td>`;
+    h+=`<td>${d.date}</td>`;
+    h+=`<td><b>本期</b> ${fmtDrawRow(d,fHitSet,bHitSet)}</td></tr>`;
+    // 上一期（allDraws 降序，索引 i+1 为更早一期）
+    const prev=allDraws[m.i+1];
+    if(prev){
+      h+=`<tr><td style="color:#999">${prev.date}</td><td><span style="color:#999">上一期 ${prev.issue}</span> ${fmtDrawRow(prev,fHitSet,bHitSet)}</td></tr>`;
+    }else{
+      h+=`<tr><td style="color:#999">-</td><td><span style="color:#999">上一期</span> 无数据</td></tr>`;
+    }
+    // 下一期（索引 i-1 为更新一期）
+    const next=allDraws[m.i-1];
+    if(next){
+      h+=`<tr><td style="color:#999">${next.date}</td><td><span style="color:#999">下一期 ${next.issue}</span> ${fmtDrawRow(next,fHitSet,bHitSet)}</td></tr>`;
+    }else{
+      h+=`<tr><td style="color:#999">-</td><td><span style="color:#999">下一期</span> 无数据</td></tr>`;
+    }
+  }
+  h+='</tbody></table>';
+  document.getElementById('qPreview').style.display='block';
+  document.getElementById('qTitle').textContent=`查询结果：${matches.length} 期（${descText}）`;
+  document.getElementById('qResult').innerHTML=h;
+  setMsg(`共找到 ${matches.length} 期`);
 }
 </script>
 </body>
