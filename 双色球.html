@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>双色球数据下载</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:linear-gradient(135deg,#0d47a1,#1e88e5);
+  min-height:100vh;display:flex;justify-content:center;align-items:center;padding:16px;
+}
+.card{
+  background:#fff;border-radius:16px;padding:24px;width:100%;max-width:420px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+}
+h1{font-size:22px;text-align:center;color:#0d47a1;margin-bottom:4px}
+.sub{text-align:center;color:#999;font-size:13px;margin-bottom:12px}
+.nav{text-align:center;margin-bottom:16px;font-size:13px}
+.nav a{color:#1e88e5;text-decoration:none;margin:0 10px}
+.nav a:hover{text-decoration:underline}
+
+.row{margin-bottom:14px}
+.row label{display:block;font-size:14px;color:#555;margin-bottom:6px;font-weight:600}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn-num{
+  flex:1;min-width:60px;padding:10px 0;border:2px solid #e0e0e0;
+  border-radius:10px;background:#fafafa;font-size:14px;font-weight:700;
+  color:#555;cursor:pointer;text-align:center;transition:all .2s;
+}
+.btn-num:active,.btn-num.active{border-color:#1e88e5;background:#e3f2fd;color:#0d47a1}
+input[type=number]{
+  width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:10px;
+  font-size:16px;text-align:center;outline:none;transition:border .2s;
+}
+input[type=number]:focus{border-color:#1e88e5}
+input[type=number]::placeholder{color:#ccc}
+input[type=text]{
+  width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:10px;
+  font-size:16px;outline:none;transition:border .2s;
+}
+input[type=text]:focus{border-color:#1e88e5}
+input[type=text]::placeholder{color:#ccc}
+
+.chks{display:flex;gap:16px;flex-wrap:wrap}
+.chks label{display:flex;align-items:center;gap:8px;font-weight:400;font-size:15px;cursor:pointer;color:#333}
+.chks input[type=checkbox]{width:20px;height:20px;accent-color:#1e88e5}
+
+.btn-go{
+  width:100%;padding:14px;background:linear-gradient(135deg,#0d47a1,#1e88e5);
+  color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;
+  cursor:pointer;transition:transform .1s,opacity .2s;
+}
+.btn-go:active{transform:scale(.97)}
+.btn-go:disabled{opacity:.5;transform:none}
+
+.progress-wrap{margin-top:16px;display:none}
+.progress-bar{height:8px;background:#eee;border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#1e88e5,#0d47a1);border-radius:4px;width:0%;transition:width .3s}
+.progress-txt{text-align:center;font-size:13px;color:#888;margin-top:6px}
+
+.preview{margin-top:16px;display:none}
+.preview h3{font-size:15px;color:#333;margin-bottom:10px}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#0d47a1;color:#fff;padding:8px 6px;text-align:center;font-weight:600;position:sticky;top:0}
+td{padding:8px 6px;text-align:center;border-bottom:1px solid #f0f0f0}
+.fnum{color:#c0392b;font-weight:700}
+.bnum{color:#0d47a1;font-weight:700}
+
+.dl-row{margin-top:14px;display:none;gap:8px}
+.dl-row.show{display:flex}
+.dl-btn{
+  flex:1;padding:10px;border-radius:10px;font-size:14px;font-weight:600;
+  border:2px solid #1e88e5;cursor:pointer;text-align:center;transition:all .2s;
+}
+.dl-btn.js{background:#e3f2fd;color:#0d47a1}
+.dl-btn.xlsx{background:#1e88e5;color:#fff}
+.dl-btn:active{opacity:.7}
+
+.msg{text-align:center;font-size:14px;color:#1e88e5;margin-top:10px;min-height:20px}
+#qResult table td{text-align:left}
+#qResult table td[rowspan]{text-align:center}
+.q-hit{color:#c0392b;font-weight:700}
+.q-hit.b{color:#0d47a1}
+#qResult table tr td:last-child{white-space:nowrap}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="card">
+  <h1>双色球数据下载</h1>
+  <p class="sub">点击下方按钮加载数据，然后选择格式下载</p>
+  <p class="nav"><a href="index.html">→ 大乐透数据下载</a></p>
+
+  <div class="row">
+    <label>下载期数</label>
+    <div class="btns" id="periodBtns">
+      <div class="btn-num" data-n="50">50 期</div>
+      <div class="btn-num active" data-n="120">120 期</div>
+      <div class="btn-num" data-n="500">500 期</div>
+      <div class="btn-num" data-n="1000">1000 期</div>
+    </div>
+    <input type="number" id="customPeriod" placeholder="或手动输入期数" min="1" max="2000" style="margin-top:8px">
+  </div>
+
+  <div class="row">
+    <label>期号范围（可选：只填开始=开始期号起往后取N期；只填结束=截止结束期号往前取N期；都填=区间内全部）</label>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input type="number" id="startIssue" placeholder="开始期号，如 2025001" min="3001" max="2999999" style="flex:1">
+      <span style="color:#999;font-size:14px;white-space:nowrap">至</span>
+      <input type="number" id="endIssue" placeholder="结束期号，如 2025125" min="3001" max="2999999" style="flex:1">
+    </div>
+  </div>
+
+  <div class="row">
+    <label>输出格式</label>
+    <div class="chks">
+      <label><input type="checkbox" id="chkJS" checked> all_draws_ssq.js</label>
+      <label><input type="checkbox" id="chkXLSX" checked> 1_ssq.xlsx</label>
+    </div>
+  </div>
+
+  <button class="btn-go" id="btnGo" onclick="startFetch()">加载数据</button>
+  <div class="msg" id="msg"></div>
+
+  <div class="progress-wrap" id="progWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+    <p class="progress-txt" id="progTxt">准备中...</p>
+  </div>
+
+  <div class="preview" id="preview">
+    <h3>最新开奖号码</h3>
+    <div class="table-wrap"><table id="previewTable"></table></div>
+  </div>
+
+  <div class="dl-row" id="dlRow">
+    <div class="dl-btn js" id="dlJS" onclick="dlJSON()">下载 JS</div>
+    <div class="dl-btn xlsx" id="dlXLSX" onclick="dlXLSX()">下载 Excel</div>
+  </div>
+
+  <div class="row" style="border-top:1px solid #eee;padding-top:16px;margin-top:16px">
+    <label>号码查询（分红蓝球输入，找出包含它们的开奖期，并显示上下期）</label>
+    <input type="text" id="qFrontNums" placeholder="红球号码（1-33），逗号/空格分隔，如 3,9,10" style="margin-bottom:8px">
+    <input type="text" id="qBackNums" placeholder="蓝球号码（1-16），逗号/空格分隔，如 7" style="margin-bottom:8px">
+    <button class="btn-go" id="btnQuery" onclick="startQuery()" style="font-size:15px;padding:12px">查询开奖号码</button>
+  </div>
+
+  <div class="preview" id="qPreview">
+    <h3 id="qTitle">查询结果</h3>
+    <div class="table-wrap" id="qResult"></div>
+  </div>
+</div>
+
+<script>
+let allDraws=[];
+
+document.getElementById('periodBtns').addEventListener('click',e=>{
+  const btn=e.target.closest('.btn-num');
+  if(!btn)return;
+  document.querySelectorAll('.btn-num').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('customPeriod').value='';
+});
+
+function getPeriod(){
+  const c=document.getElementById('customPeriod').value;
+  if(c&&parseInt(c)>0)return Math.min(parseInt(c),2000);
+  const a=document.querySelector('.btn-num.active');
+  return a?parseInt(a.dataset.n):120;
+}
+
+function getIssueRange(){
+  const s=document.getElementById('startIssue').value.trim();
+  const e=document.getElementById('endIssue').value.trim();
+  const start=s&&parseInt(s)>0?parseInt(s):null;
+  const end=e&&parseInt(e)>0?parseInt(e):null;
+  return {start,end};
+}
+
+async function startFetch(){
+  const period=getPeriod();
+  const range=getIssueRange();
+  if(range.start!==null&&range.end!==null&&range.start>range.end){
+    setMsg('开始期号不能大于结束期号');return;
+  }
+  const wantJS=document.getElementById('chkJS').checked;
+  const wantXLSX=document.getElementById('chkXLSX').checked;
+  if(!wantJS&&!wantXLSX){setMsg('请至少选择一种格式');return}
+
+  const btn=document.getElementById('btnGo');
+  btn.disabled=true;btn.textContent='加载中...';
+  document.getElementById('progWrap').style.display='block';
+  document.getElementById('preview').style.display='none';
+  document.getElementById('dlRow').style.display='none';
+  setMsg('正在从仓库加载数据...');
+
+  allDraws=[];
+  try{
+    await fetchAll(period, range);
+    if(allDraws.length===0)throw new Error('该期号范围内没有数据，请检查期号范围');
+    showPreview();
+    document.getElementById('dlRow').style.display='flex';
+    setMsg(`加载完成！共 ${allDraws.length} 期，点击下方按钮下载`);
+  }catch(e){
+    console.error(e);
+    setMsg('加载失败: '+e.message+'（请先运行"更新双色球数据.bat"或 GitHub Actions"更新双色球数据"）');
+  }finally{
+    btn.disabled=false;btn.textContent='加载数据';
+    document.getElementById('progWrap').style.display='none';
+  }
+}
+
+function setProg(pct,txt){
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progTxt').textContent=txt;
+}
+function setMsg(t){document.getElementById('msg').textContent=t;}
+
+// === 核心：无代理架构 ===
+// 更新脚本在本地/GitHub Actions 抓取数据 → 生成 all_draws_ssq.js → 前端直接加载
+// 无需任何 CORS 代理，完美避开浏览器跨域限制
+
+async function loadFromRepo(period, range){
+  // 直接加载仓库里已生成的 all_draws_ssq.js（同源，无CORS问题）
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),15000);
+  try{
+    const r=await fetch('all_draws_ssq.js',{signal:ctrl.signal,cache:'no-cache'});
+    if(!r.ok){
+      if(r.status===404)throw new Error('数据文件不存在，请先运行更新脚本生成 all_draws_ssq.js');
+      throw new Error('请求失败 '+r.status);
+    }
+    const code=await r.text();
+    if(!code||code.trim()==='')throw new Error('数据文件为空');
+
+    // 执行 JS 文件获取 SSQ_DRAWS 数组
+    const fn=new Function(code+'\nreturn SSQ_DRAWS;');
+    const draws=fn();
+    if(!Array.isArray(draws)||draws.length===0)throw new Error('数据为空，请先运行更新脚本');
+
+    // all_draws_ssq.js 存储的是升序（从旧到新），最新数据在最后
+    let list;
+    if(range.start!==null&&range.end!==null){
+      // 起止期号都填：按范围过滤
+      list=draws.filter(d=>{
+        const n=parseInt(d.issue);
+        if(n<range.start)return false;
+        if(n>range.end)return false;
+        return true;
+      });
+    }else if(range.start!==null){
+      // 只填开始期号：从开始期号起算，往后取 period 期
+      list=draws.filter(d=>parseInt(d.issue)>=range.start).slice(0,period);
+    }else if(range.end!==null){
+      // 只填结束期号：取到结束期号为止的前 period 期
+      list=draws.filter(d=>parseInt(d.issue)<=range.end).slice(-period);
+    }else{
+      // 起止期号都没填：取最后 period 期（最新）
+      list=draws.slice(-period);
+    }
+    // 转成降序（最新在前）
+    allDraws=list.reverse();
+    return allDraws.length;
+  }catch(e){
+    console.error('加载数据失败:',e);
+    throw e;
+  }finally{clearTimeout(t);}
+}
+
+async function fetchAll(period, range){
+  setMsg('正在加载数据...');
+  setProg(10,'加载 all_draws_ssq.js...');
+  const count=await loadFromRepo(period, range);
+  setProg(90,`加载完成 ${count} 期`);
+  return count;
+}
+
+function showPreview(){
+  const t=document.getElementById('previewTable');
+  let h='<thead><tr><th>期号</th><th>日期</th><th colspan="6">红球</th><th>蓝球</th></tr></thead><tbody>';
+  for(let i=0;i<Math.min(10,allDraws.length);i++){
+    const d=allDraws[i];
+    h+=`<tr><td>${d.issue}</td><td>${d.date.slice(5)}</td>`;
+    d.front.forEach(n=>h+=`<td class="fnum">${String(n).padStart(2,'0')}</td>`);
+    d.back.forEach(n=>h+=`<td class="bnum">${String(n).padStart(2,'0')}</td>`);
+    h+='</tr>';
+  }
+  h+='</tbody>';
+  t.innerHTML=h;
+  document.getElementById('preview').style.display='block';
+}
+
+function genJS(){
+  let out=`// 双色球开奖数据 — ${allDraws.length}期\n// 生成时间: ${new Date().toLocaleString()}\n// 数据来源: 中国福彩官网API\n\nvar SSQ_DRAWS = [\n`;
+  for(let i=allDraws.length-1;i>=0;i--){
+    const d=allDraws[i];
+    out+=`  {issue:"${d.issue}",date:"${d.date}",front:[${d.front.join(',')}],back:[${d.back.join(',')}],front_str:"${d.front.map(n=>String(n).padStart(2,'0')).join(' ')}",back_str:"${d.back.map(n=>String(n).padStart(2,'0')).join(' ')}"}`;
+    out+=i>0?',\n':'';
+  }
+  out+=`\n];\n`;
+  return out;
+}
+
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function dlJSON(){
+  const n=allDraws.length;
+  downloadBlob(new Blob(['\uFEFF'+genJS()],{type:'text/javascript;charset=utf-8'}),`双色球${n}期.js`);
+}
+
+function dlXLSX(){
+  setMsg('生成 Excel 中...');
+  try{
+    if(typeof XLSX==='undefined')throw new Error('SheetJS 未加载，请检查网络');
+    const n=allDraws.length;
+    const wd=['日','一','二','三','四','五','六'];
+    const headers=['期号','开奖时间','周','红球一','红球二','红球三','红球四','红球五','红球六','蓝球'];
+    const aoa=[headers];
+    for(const d of allDraws){
+      const day=wd[new Date(d.date).getDay()]||'';
+      aoa.push([d.issue,d.date,day,
+        d.front[0],d.front[1],d.front[2],d.front[3],d.front[4],d.front[5],
+        d.back[0]]);
+    }
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:8},{wch:12},{wch:4},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6}];
+    ws['!freeze']={xSplit:0,ySplit:1};
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'双色球开奖数据');
+    XLSX.writeFile(wb,`双色球${n}期.xlsx`);
+    setMsg('Excel 下载完成！');
+  }catch(e){setMsg('Excel生成失败: '+e.message);}
+}
+
+// === 号码查询 ===
+function pad2(n){return String(n).padStart(2,'0');}
+
+function fmtDrawNum(n, hitSet, isBlue){
+  return `<span class="${hitSet.has(n)?'q-hit'+(isBlue?' b':''):''}">${pad2(n)}</span>`;
+}
+
+function fmtDrawRow(d, fHitSet, bHitSet){
+  const frontHtml=d.front.map(n=>fmtDrawNum(n,fHitSet,false)).join(' ');
+  const backHtml=d.back.map(n=>fmtDrawNum(n,bHitSet,true)).join(' ');
+  return `${frontHtml} | ${backHtml}`;
+}
+
+function startQuery(){
+  const fraw=document.getElementById('qFrontNums').value.trim();
+  const braw=document.getElementById('qBackNums').value.trim();
+  if(!fraw && !braw){setMsg('请输入红球或蓝球号码');return;}
+  // 解析红球（1-33）与蓝球（1-16）
+  const fnums=fraw?fraw.split(/[\s,，、;；]+/).map(s=>parseInt(s)).filter(n=>!isNaN(n)&&n>=1&&n<=33):[];
+  const bnums=braw?braw.split(/[\s,，、;；]+/).map(s=>parseInt(s)).filter(n=>!isNaN(n)&&n>=1&&n<=16):[];
+  if(fraw && fnums.length===0){setMsg('红球号码无效（应为 1-33）');return;}
+  if(braw && bnums.length===0){setMsg('蓝球号码无效（应为 1-16）');return;}
+  const funiq=[...new Set(fnums)];
+  const buniq=[...new Set(bnums)];
+
+  if(allDraws.length===0){setMsg('请先点击"加载数据"');return;}
+
+  // allDraws 为降序（最新在前）。红球需包含全部红球输入 且 蓝球需包含全部蓝球输入
+  const matches=[];
+  for(let i=0;i<allDraws.length;i++){
+    const d=allDraws[i];
+    const fHit=funiq.filter(n=>d.front.includes(n));
+    const bHit=buniq.filter(n=>d.back.includes(n));
+    const fOk=funiq.length===0||fHit.length===funiq.length;
+    const bOk=buniq.length===0||bHit.length===buniq.length;
+    if(fOk&&bOk)matches.push({i,d,fHit,bHit});
+  }
+  // 查询描述
+  const desc=[];
+  if(funiq.length)desc.push('红球 '+funiq.join(','));
+  if(buniq.length)desc.push('蓝球 '+buniq.join(','));
+  const descText=desc.join('，');
+  if(matches.length===0){
+    document.getElementById('qPreview').style.display='block';
+    document.getElementById('qTitle').textContent='查询结果：无匹配';
+    document.getElementById('qResult').innerHTML='<p style="text-align:center;color:#999;padding:10px">没有开奖期包含这些号码</p>';
+    setMsg(`共找到 0 期`);
+    return;
+  }
+  // 渲染结果
+  let h='<table><thead><tr><th>期号</th><th>日期</th><th>开奖号码（高亮=命中）</th></tr></thead><tbody>';
+  for(const m of matches){
+    const d=m.d;
+    const fHitSet=new Set(m.fHit);
+    const bHitSet=new Set(m.bHit);
+    h+=`<tr><td rowspan="3" style="font-weight:700;color:#0d47a1">${d.issue}</td>`;
+    h+=`<td>${d.date}</td>`;
+    h+=`<td><b>本期</b> ${fmtDrawRow(d,fHitSet,bHitSet)}</td></tr>`;
+    // 上一期（allDraws 降序，索引 i+1 为更早一期）
+    const prev=allDraws[m.i+1];
+    if(prev){
+      h+=`<tr><td style="color:#999">${prev.date}</td><td><span style="color:#999">上一期 ${prev.issue}</span> ${fmtDrawRow(prev,fHitSet,bHitSet)}</td></tr>`;
+    }else{
+      h+=`<tr><td style="color:#999">-</td><td><span style="color:#999">上一期</span> 无数据</td></tr>`;
+    }
+    // 下一期（索引 i-1 为更新一期）
+    const next=allDraws[m.i-1];
+    if(next){
+      h+=`<tr><td style="color:#999">${next.date}</td><td><span style="color:#999">下一期 ${next.issue}</span> ${fmtDrawRow(next,fHitSet,bHitSet)}</td></tr>`;
+    }else{
+      h+=`<tr><td style="color:#999">-</td><td><span style="color:#999">下一期</span> 无数据</td></tr>`;
+    }
+  }
+  h+='</tbody></table>';
+  document.getElementById('qPreview').style.display='block';
+  document.getElementById('qTitle').textContent=`查询结果：${matches.length} 期（${descText}）`;
+  document.getElementById('qResult').innerHTML=h;
+  setMsg(`共找到 ${matches.length} 期`);
+}
+</script>
+</body>
+</html>
